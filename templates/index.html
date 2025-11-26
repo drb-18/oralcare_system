@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OralCare Clinic - Frontend SPA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Tailwind CSS (OK for development) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Axios -->
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+  <!-- Socket.IO -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Simple loader */
+    #global-loader {
+      display: none;
+    }
+    .page {
+      display: none;
+    }
+    .page-active {
+      display: block;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-100 text-slate-900">
+<div id="app" class="min-h-screen flex flex-col">
+
+  <!-- Global Loader & Toast -->
+  <div id="global-loader"
+       class="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+    <div class="bg-white px-6 py-4 rounded-xl shadow-lg flex items-center space-x-3">
+      <div class="h-8 w-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+      <span class="font-medium text-slate-700">Loading...</span>
+    </div>
+  </div>
+
+  <div id="toast"
+       class="fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg text-sm bg-slate-900 text-white hidden z-50"></div>
+
+  <!-- Top Navbar -->
+  <header class="bg-white shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-sky-500 text-white font-bold">OC</span>
+        <span class="font-semibold text-lg">OralCare Clinic</span>
+      </div>
+      <div class="flex items-center space-x-4">
+        <span id="current-user-label" class="text-sm text-slate-500"></span>
+        <button id="btn-nav-login"
+                class="text-sm px-3 py-1 rounded-full border border-slate-300 hover:bg-slate-100">
+          Login
+        </button>
+        <button id="btn-nav-admin-login"
+                class="text-sm px-3 py-1 rounded-full border border-amber-300 text-amber-700 hover:bg-amber-50">
+          Admin Login
+        </button>
+        <button id="btn-nav-logout"
+                class="hidden text-sm px-3 py-1 rounded-full border border-red-300 text-red-600 hover:bg-red-50">
+          Logout
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex flex-1 max-w-7xl mx-auto w-full">
+
+    <!-- Sidebar -->
+    <aside id="sidebar"
+           class="hidden md:block w-64 bg-white border-r border-slate-200 p-4 space-y-4">
+      <div>
+        <div class="text-xs font-semibold text-slate-400 uppercase mb-2">Navigation</div>
+        <nav class="space-y-1 text-sm" id="sidebar-links">
+          <!-- Filled dynamically based on role -->
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-4 md:p-6 space-y-4">
+
+      <!-- PUBLIC: Queue Display Page -->
+      <section id="page-queue-display" class="page">
+        <h1 class="text-xl font-semibold mb-4 flex items-center justify-between">
+          Queue Display
+          <button class="text-xs px-3 py-1 rounded-full bg-slate-800 text-white"
+                  onclick="connectSocketIfNeeded()">
+            Connect Socket
+          </button>
+        </h1>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="text-sm font-medium text-slate-500 mb-2">Current Token</div>
+            <div id="queue-current-token"
+                 class="text-5xl font-bold text-sky-600 text-center py-6">
+              --
+            </div>
+          </div>
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="text-sm font-medium text-slate-500 mb-2">Upcoming Tokens</div>
+            <ul id="queue-upcoming-list" class="space-y-2 text-center text-lg">
+              <!-- upcoming -->
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- PUBLIC: Walk-in Registration -->
+      <section id="page-walkin" class="page">
+        <h1 class="text-xl font-semibold mb-4">Walk-in Registration</h1>
+        <form id="form-walkin" class="bg-white rounded-xl p-4 shadow-sm space-y-3 max-w-md">
+          <div>
+            <label class="block text-sm mb-1">Patient Name</label>
+            <input name="name" class="w-full border rounded-lg px-3 py-2 text-sm" required />
+          </div>
+          <div>
+            <label class="block text-sm mb-1">Phone</label>
+            <input name="phone" class="w-full border rounded-lg px-3 py-2 text-sm" required />
+          </div>
+          <div>
+            <label class="block text-sm mb-1">Service</label>
+            <select name="service_id" id="walkin-service-select"
+                    class="w-full border rounded-lg px-3 py-2 text-sm" required>
+              <option value="">Select service</option>
+            </select>
+          </div>
+          <button class="w-full rounded-lg bg-sky-600 text-white py-2 text-sm font-medium hover:bg-sky-700">
+            Create Walk-in Token
+          </button>
+        </form>
+        <div id="walkin-result" class="mt-4 text-sm text-slate-700"></div>
+      </section>
+
+      <!-- AUTH: Login with Email/Password & OTP -->
+      <section id="page-login" class="page">
+        <h1 class="text-xl font-semibold mb-4">Login</h1>
+        <div class="bg-white rounded-xl p-4 shadow-sm grid md:grid-cols-2 gap-4">
+
+          <!-- Email/password login -->
+          <div>
+            <h2 class="text-sm font-semibold mb-3">Email &amp; Password</h2>
+            <form id="form-login" class="space-y-3">
+              <div>
+                <label class="block text-xs mb-1">Email</label>
+                <input name="email" type="email"
+                       class="w-full border rounded-lg px-3 py-2 text-sm" required />
+              </div>
+              <div>
+                <label class="block text-xs mb-1">Password</label>
+                <input name="password" type="password"
+                       class="w-full border rounded-lg px-3 py-2 text-sm" required />
+              </div>
+              <button class="w-full rounded-lg bg-sky-600 text-white py-2 text-sm font-medium hover:bg-sky-700">
+                Login
+              </button>
+            </form>
+          </div>
+
+          <!-- OTP login -->
+          <div>
+            <h2 class="text-sm font-semibold mb-3">OTP Login (Email)</h2>
+            <form id="form-send-otp" class="space-y-3">
+              <div>
+                <label class="block text-xs mb-1">Email</label>
+                <input name="email" type="email"
+                       class="w-full border rounded-lg px-3 py-2 text-sm" required />
+              </div>
+              <button class="w-full rounded-lg border border-sky-600 text-sky-700 py-2 text-sm font-medium hover:bg-sky-50">
+                Send OTP
+              </button>
+            </form>
+            <form id="form-verify-otp" class="mt-4 space-y-3">
+              <div>
+                <label class="block text-xs mb-1">Email</label>
+                <input name="email" type="email"
+                       class="w-full border rounded-lg px-3 py-2 text-sm" required />
+              </div>
+              <div>
+                <label class="block text-xs mb-1">OTP</label>
+                <input name="otp" type="text"
+                       class="w-full border rounded-lg px-3 py-2 text-sm" required />
+              </div>
+              <button class="w-full rounded-lg bg-emerald-600 text-white py-2 text-sm font-medium hover:bg-emerald-700">
+                Verify & Login
+              </button>
+            </form>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ADMIN LOGIN PAGE -->
+      <section id="page-admin-login" class="page">
+        <h1 class="text-xl font-semibold mb-4">Admin Login</h1>
+        <div class="bg-white rounded-xl p-4 shadow-sm max-w-md">
+          <form id="form-admin-login" class="space-y-3">
+            <div>
+              <label class="block text-xs mb-1">Admin Email</label>
+              <input name="email" type="email"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" required />
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Password</label>
+              <input name="password" type="password"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" required />
+            </div>
+            <button class="w-full rounded-lg bg-amber-600 text-white py-2 text-sm font-medium hover:bg-amber-700">
+              Login as Admin
+            </button>
+          </form>
+          <p class="mt-3 text-xs text-slate-500">
+            This login is restricted to users with the <span class="font-semibold">admin</span> role.
+          </p>
+        </div>
+      </section>
+
+      <!-- PATIENT DASHBOARD -->
+      <section id="page-patient-dashboard" class="page">
+        <h1 class="text-xl font-semibold mb-4">Patient Dashboard</h1>
+        <div class="grid md:grid-cols-3 gap-4 mb-4">
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-slate-500 mb-1">Upcoming Appointments</div>
+            <div id="patient-stat-upcoming" class="text-2xl font-semibold">0</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-slate-500 mb-1">Past Appointments</div>
+            <div id="patient-stat-past" class="text-2xl font-semibold">0</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-slate-500 mb-1">Total Prescriptions</div>
+            <div id="patient-stat-prescriptions" class="text-2xl font-semibold">0</div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold">Recent Timeline</h2>
+            <button class="text-xs text-sky-600"
+                    onclick="showPage('patient-timeline')">View full timeline</button>
+          </div>
+          <ul id="patient-dashboard-timeline" class="space-y-2 text-sm"></ul>
+        </div>
+      </section>
+
+      <!-- BOOK APPOINTMENT (NORMAL SINGLE-DOCTOR) -->
+      <section id="page-book-appointment" class="page">
+        <h1 class="text-xl font-semibold mb-4">Book Appointment</h1>
+
+        <form id="form-book-appointment"
+              class="bg-white rounded-xl p-4 shadow-sm space-y-3 max-w-xl">
+
+          <!-- Service -->
+          <div>
+            <label class="block text-sm mb-1">Service</label>
+            <select id="book-service-select" name="service_id"
+                    class="w-full border rounded-lg px-3 py-2 text-sm" required>
+              <option value="">Select service</option>
+            </select>
+          </div>
+
+          <!-- Date -->
+          <div>
+            <label class="block text-sm mb-1">Date</label>
+            <input type="date" id="book-date"
+                   class="w-full border rounded-lg px-3 py-2 text-sm" required />
+          </div>
+
+          <!-- Time -->
+          <div>
+            <label class="block text-sm mb-1">Time (9:00 AM - 6:00 PM)</label>
+            <input type="time" id="book-time"
+                   min="09:00" max="18:00"
+                   class="w-full border rounded-lg px-3 py-2 text-sm"
+                   required />
+          </div>
+
+          <button class="rounded-lg bg-sky-600 text-white py-2 px-4 text-sm font-medium hover:bg-sky-700">
+            Book Appointment
+          </button>
+        </form>
+
+        <div id="book-appointment-result"
+             class="mt-4 text-sm text-slate-700"></div>
+      </section>
+
+      <!-- VIEW APPOINTMENTS (PATIENT) -->
+      <section id="page-view-appointments" class="page">
+        <h1 class="text-xl font-semibold mb-4">My Appointments</h1>
+        <div class="bg-white rounded-xl p-4 shadow-sm">
+          <table class="w-full text-sm">
+            <thead class="text-left text-xs text-slate-500 border-b">
+            <tr>
+              <th class="py-2">ID</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Type</th>
+              <th>Queue</th>
+              <th></th>
+            </tr>
+            </thead>
+            <tbody id="table-patient-appointments" class="divide-y text-xs"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- APPOINTMENT DETAIL -->
+      <section id="page-appointment-detail" class="page">
+        <h1 class="text-xl font-semibold mb-4">Appointment Detail</h1>
+        <div id="appointment-detail-container" class="space-y-4"></div>
+      </section>
+
+      <!-- PATIENT TIMELINE -->
+      <section id="page-patient-timeline" class="page">
+        <h1 class="text-xl font-semibold mb-4">Visit History Timeline</h1>
+        <div id="timeline-list" class="bg-white rounded-xl p-4 shadow-sm space-y-3 text-sm"></div>
+      </section>
+
+      <!-- SERVICES PAGE -->
+      <section id="page-services" class="page">
+        <h1 class="text-xl font-semibold mb-4">Services</h1>
+        <div id="services-list" class="grid md:grid-cols-3 gap-4"></div>
+      </section>
+
+      <!-- DOCTOR DASHBOARD -->
+      <section id="page-doctor-dashboard" class="page">
+        <h1 class="text-xl font-semibold mb-4">Doctor Dashboard</h1>
+        <div class="grid md:grid-cols-3 gap-4 mb-4">
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-slate-500 mb-1">Today Appointments</div>
+            <div id="doc-stat-today" class="text-2xl font-semibold">0</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-slate-500 mb-1">Pending Payments</div>
+            <div id="doc-stat-pending" class="text-2xl font-semibold">0</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-slate-500 mb-1">Walk-ins Today</div>
+            <div id="doc-stat-walkins" class="text-2xl font-semibold">0</div>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-500">Top Services (30d)</span>
+            </div>
+            <ul id="doc-top-services" class="text-sm space-y-1"></ul>
+          </div>
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="text-xs font-semibold text-slate-500 mb-2">Low Stock Inventory</div>
+            <ul id="doc-low-stock" class="text-sm space-y-1"></ul>
+          </div>
+        </div>
+
+        <div class="mt-4 bg-white rounded-xl p-4 shadow-sm">
+          <h2 class="text-xs font-semibold text-slate-500 mb-2">Revenue per Month</h2>
+          <canvas id="chart-revenue-month"></canvas>
+        </div>
+      </section>
+
+      <!-- DOCTOR APPOINTMENTS (today's queue view) -->
+      <section id="page-doctor-appointments" class="page">
+        <h1 class="text-xl font-semibold mb-4">Today's Appointments</h1>
+        <div class="bg-white rounded-xl p-4 shadow-sm">
+          <table class="w-full text-sm">
+            <thead class="text-xs text-slate-500 border-b">
+            <tr>
+              <th class="py-2">Token</th>
+              <th>Patient</th>
+              <th>Visit type</th>
+              <th>Status</th>
+              <th>Queue</th>
+            </tr>
+            </thead>
+            <tbody id="table-doctor-today" class="divide-y text-xs"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- QUEUE CONTROLLER (Doctor) -->
+      <section id="page-queue-controller" class="page">
+        <h1 class="text-xl font-semibold mb-4">Queue Controller</h1>
+        <div class="bg-white rounded-xl p-4 shadow-sm space-y-3 max-w-md">
+          <button onclick="queueNext()"
+                  class="w-full rounded-lg bg-sky-600 text-white py-2 text-sm font-medium hover:bg-sky-700">
+            Call Next Patient
+          </button>
+
+          <!-- NEW BUTTON: COMPLETE CURRENT & CALL NEXT -->
+          <button onclick="queueCompleteAndNext()"
+                  class="w-full rounded-lg bg-emerald-600 text-white py-2 text-sm font-medium hover:bg-emerald-700">
+            Complete Current & Call Next
+          </button>
+
+          <div>
+            <label class="block text-xs mb-1">Skip Appointment ID</label>
+            <div class="flex space-x-2">
+              <input id="queue-skip-id"
+                     class="flex-1 border rounded-lg px-3 py-2 text-sm" />
+              <button onclick="queueSkip()"
+                      class="rounded-lg bg-red-600 text-white px-3 text-sm font-medium hover:bg-red-700">
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CREATE PRESCRIPTION -->
+      <section id="page-create-prescription" class="page">
+        <h1 class="text-xl font-semibold mb-4">Create Prescription</h1>
+        <form id="form-prescription"
+              class="bg-white rounded-xl p-4 shadow-sm space-y-3 max-w-2xl">
+          <div>
+            <label class="block text-xs mb-1">Appointment ID</label>
+            <input name="appointment_id"
+                   class="w-full border rounded-lg px-3 py-2 text-sm" required />
+          </div>
+          <div>
+            <label class="block text-xs mb-1">Diagnosis</label>
+            <textarea name="diagnosis"
+                      class="w-full border rounded-lg px-3 py-2 text-sm" rows="2"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs mb-1">Notes</label>
+            <textarea name="notes"
+                      class="w-full border rounded-lg px-3 py-2 text-sm" rows="2"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs mb-1 mb-2">Medicines</label>
+            <div id="medicines-list" class="space-y-2"></div>
+            <button type="button" class="mt-2 text-xs text-sky-600"
+                    onclick="addMedicineRow()">+ Add medicine</button>
+          </div>
+          <button class="rounded-lg bg-emerald-600 text-white py-2 px-4 text-sm font-medium hover:bg-emerald-700">
+            Save Prescription
+          </button>
+        </form>
+        <div id="prescription-result" class="mt-3 text-sm text-slate-700"></div>
+      </section>
+
+      <!-- PRESCRIPTION PDF VIEWER -->
+      <section id="page-prescription-pdf" class="page">
+        <h1 class="text-xl font-semibold mb-4">Prescription PDF</h1>
+        <div class="bg-white rounded-xl p-4 shadow-sm space-y-3 max-w-md">
+          <label class="block text-xs mb-1">Prescription ID</label>
+          <div class="flex space-x-2">
+            <input id="prescription-pdf-id"
+                   class="flex-1 border rounded-lg px-3 py-2 text-sm" />
+            <button onclick="openPrescriptionPdf()"
+                    class="rounded-lg bg-sky-600 text-white px-3 text-sm font-medium hover:bg-sky-700">
+              Open PDF
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- REPORTS: UPLOAD & VIEW -->
+      <section id="page-reports" class="page">
+        <h1 class="text-xl font-semibold mb-4">Reports</h1>
+        <div class="grid md:grid-cols-2 gap-4">
+          <form id="form-upload-report"
+                class="bg-white rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="text-sm font-semibold mb-2">Upload Report</h2>
+            <div>
+              <label class="block text-xs mb-1">Appointment ID</label>
+              <input name="appointment_id"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" required />
+            </div>
+            <div>
+              <label class="block text-xs mb-1">File</label>
+              <input type="file" name="file"
+                     class="w-full text-sm" required />
+            </div>
+            <button class="rounded-lg bg-sky-600 text-white py-2 px-4 text-sm font-medium hover:bg-sky-700">
+              Upload
+            </button>
+          </form>
+
+          <div class="bg-white rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="text-sm font-semibold mb-2">Reports via Timeline</h2>
+            <p class="text-xs text-slate-500">
+              Reports are linked to appointments and visible in the patient timeline.
+              Use the patient timeline page to view and download reports.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- INCOME & EXPENSE PAGE -->
+      <section id="page-finance" class="page">
+        <h1 class="text-xl font-semibold mb-4">Income & Expense</h1>
+        <div class="grid md:grid-cols-2 gap-4">
+          <form id="form-expense"
+                class="bg-white rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="text-sm font-semibold mb-2">Add Expense</h2>
+            <div>
+              <label class="block text-xs mb-1">Amount</label>
+              <input name="amount"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" required />
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Type</label>
+              <input name="type"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Date</label>
+              <input name="date" type="date"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Notes</label>
+              <textarea name="notes"
+                        class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+            </div>
+            <button class="rounded-lg bg-red-600 text-white py-2 px-4 text-sm font-medium hover:bg-red-700">
+              Add Expense
+            </button>
+          </form>
+
+          <div class="bg-white rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="text-sm font-semibold mb-2">Summary (last 30 days or range)</h2>
+            <form id="form-finance-range" class="space-y-2 text-xs">
+              <div class="flex space-x-2">
+                <div class="flex-1">
+                  <label class="block mb-1">From</label>
+                  <input name="from" type="date"
+                         class="w-full border rounded-lg px-3 py-1" />
+                </div>
+                <div class="flex-1">
+                  <label class="block mb-1">To</label>
+                  <input name="to" type="date"
+                         class="w-full border rounded-lg px-3 py-1" />
+                </div>
+              </div>
+              <button class="rounded-lg bg-slate-800 text-white py-1 px-3">
+                Refresh
+              </button>
+            </form>
+            <div id="finance-summary" class="text-sm mt-2"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- INVENTORY PAGE -->
+      <section id="page-inventory" class="page">
+        <h1 class="text-xl font-semibold mb-4">Inventory</h1>
+        <div class="grid md:grid-cols-2 gap-4">
+          <form id="form-inventory"
+                class="bg-white rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="text-sm font-semibold mb-2">Create / Update Item</h2>
+            <input type="hidden" name="id" />
+            <div>
+              <label class="block text-xs mb-1">Name</label>
+              <input name="name"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" required />
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-xs">
+              <div>
+                <label class="block mb-1">Quantity</label>
+                <input name="quantity"
+                       class="w-full border rounded-lg px-2 py-1" />
+              </div>
+              <div>
+                <label class="block mb-1">Min</label>
+                <input name="min_required"
+                       class="w-full border rounded-lg px-2 py-1" />
+              </div>
+              <div>
+                <label class="block mb-1">Unit</label>
+                <input name="unit"
+                       class="w-full border rounded-lg px-2 py-1" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Expiry date</label>
+              <input type="date" name="expiry_date"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <button class="rounded-lg bg-sky-600 text-white py-2 px-4 text-sm font-medium hover:bg-sky-700">
+              Save Item
+            </button>
+          </form>
+
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <h2 class="text-sm font-semibold mb-2">Inventory List</h2>
+            <div id="inventory-list" class="space-y-2 text-sm"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAYMENTS PAGE (Razorpay / Stripe skeleton) -->
+      <section id="page-payments" class="page">
+        <h1 class="text-xl font-semibold mb-4">Payments</h1>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="bg-white rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="text-sm font-semibold mb-2">Razorpay Payment</h2>
+            <form id="form-razorpay-create" class="space-y-2 text-sm">
+              <div>
+                <label class="block text-xs mb-1">Appointment ID</label>
+                <input name="appointment_id"
+                       class="w-full border rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <button class="rounded-lg bg-sky-600 text-white py-2 px-4 text-xs font-medium hover:bg-sky-700">
+                Create Razorpay Order
+              </button>
+            </form>
+            <pre id="razorpay-order" class="text-xs bg-slate-50 p-2 rounded-md overflow-x-auto"></pre>
+          </div>
+
+          <div class="bg-white rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="text-sm font-semibold mb-2">Stripe / Other</h2>
+            <p class="text-xs text-slate-500">
+              Use Stripe checkout or payment links from your backend.
+              This section is a placeholder; wire it up to your Stripe endpoints.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ADMIN PANEL -->
+      <section id="page-admin" class="page">
+        <h1 class="text-xl font-semibold mb-4">Admin Panel</h1>
+
+        <div class="grid md:grid-cols-2 gap-4 mb-4">
+          <!-- Users list -->
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-sm font-semibold">Users</h2>
+              <button class="text-xs text-sky-600" onclick="loadAdminUsers()">
+                Refresh
+              </button>
+            </div>
+            <table class="w-full text-xs">
+              <thead class="border-b text-slate-500">
+              <tr>
+                <th class="py-1 text-left">ID</th>
+                <th>Name</th>
+                <th>Role</th>
+                <th></th>
+              </tr>
+              </thead>
+              <tbody id="admin-users-table" class="divide-y"></tbody>
+            </table>
+          </div>
+
+          <!-- Create Doctor -->
+          <form id="form-create-doctor"
+                class="bg-white rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="text-sm font-semibold mb-2">Create Doctor</h2>
+            <div>
+              <label class="block text-xs mb-1">Name</label>
+              <input name="name"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" required />
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Email</label>
+              <input name="email" type="email"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" required />
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Password</label>
+              <input name="password" type="password"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" required />
+            </div>
+            <button class="rounded-lg bg-sky-600 text-white py-2 px-4 text-sm font-medium hover:bg-sky-700">
+              Create
+            </button>
+          </form>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <!-- Analytics -->
+          <div class="bg-white rounded-xl p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-sm font-semibold">Appointments per Week</h2>
+              <button class="text-xs text-sky-600" onclick="loadAppointmentsPerWeekChart()">
+                Refresh
+              </button>
+            </div>
+            <canvas id="chart-appointments-week"></canvas>
+          </div>
+
+          <!-- Exports -->
+          <div class="bg-white rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="text-sm font-semibold mb-2">Exports</h2>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <button onclick="downloadFile('/export/patients/xlsx')"
+                      class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50">
+                Patients XLSX
+              </button>
+              <button onclick="downloadFile('/export/appointments/xlsx')"
+                      class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50">
+                Appointments XLSX
+              </button>
+              <button onclick="downloadFile('/export/reports/zip')"
+                      class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50">
+                Reports ZIP
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS PAGE -->
+      <section id="page-settings" class="page">
+        <h1 class="text-xl font-semibold mb-4">Settings</h1>
+        <form id="form-settings"
+              class="bg-white rounded-xl p-4 shadow-sm space-y-3 max-w-xl"
+              enctype="multipart/form-data">
+          <div>
+            <label class="block text-xs mb-1">Name</label>
+            <input name="name"
+                   class="w-full border rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs mb-1">Phone</label>
+            <input name="phone"
+                   class="w-full border rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs mb-1">Address</label>
+            <textarea name="address"
+                      class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+          </div>
+          <div class="grid md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs mb-1">Date of Birth</label>
+              <input name="dob" type="date"
+                     class="w-full border rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Profile Picture</label>
+              <input type="file" name="profile_pic"
+                     class="w-full text-xs" />
+            </div>
+          </div>
+          <div id="settings-doctor-cert" class="hidden">
+            <label class="block text-xs mb-1">Doctor Certificate</label>
+            <input type="file" name="certificate_file"
+                   class="w-full text-xs" />
+          </div>
+          <button class="rounded-lg bg-sky-600 text-white py-2 px-4 text-sm font-medium hover:bg-sky-700">
+            Save Settings
+          </button>
+        </form>
+        <div id="settings-summary" class="mt-3 text-xs text-slate-600"></div>
+      </section>
+
+    </main>
+
+  </div>
+</div>
+
+<script>
+  // ================= CONFIG & GLOBAL STATE =================
+  const API_BASE_URL = "http://localhost:5000";
+
+  const api = axios.create({
+    baseURL: API_BASE_URL
+  });
+
+  let authState = {
+    token: null,
+    user: null // {id, role, name}
+  };
+
+  let socket = null;
+  let charts = {
+    revenueMonth: null,
+    apptsWeek: null
+  };
+
+  // ============== UTILITIES ==============
+
+  function setLoader(show) {
+    const loader = document.getElementById("global-loader");
+    if (loader) loader.style.display = show ? "flex" : "none";
+  }
+
+  function showToast(msg, type = "info") {
+    const toast = document.getElementById("toast");
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.remove("hidden");
+    toast.classList.remove("bg-red-600", "bg-emerald-600", "bg-slate-900");
+    if (type === "error") toast.classList.add("bg-red-600");
+    else if (type === "success") toast.classList.add("bg-emerald-600");
+    else toast.classList.add("bg-slate-900");
+    setTimeout(() => toast.classList.add("hidden"), 3000);
+  }
+
+  function saveAuth() {
+    if (authState.token && authState.user) {
+      localStorage.setItem("oralcare_auth", JSON.stringify(authState));
+      api.defaults.headers.common["Authorization"] = "Bearer " + authState.token;
+    } else {
+      localStorage.removeItem("oralcare_auth");
+      delete api.defaults.headers.common["Authorization"];
+    }
+    updateNavAuth();
+  }
+
+  function loadAuth() {
+    const raw = localStorage.getItem("oralcare_auth");
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      authState = parsed;
+      api.defaults.headers.common["Authorization"] = "Bearer " + authState.token;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function clearAuth() {
+    authState = { token: null, user: null };
+    saveAuth();
+  }
+
+  function role() {
+    return authState.user ? authState.user.role : null;
+  }
+
+  function updateNavAuth() {
+    const lbl = document.getElementById("current-user-label");
+    const btnLogin = document.getElementById("btn-nav-login");
+    const btnAdminLogin = document.getElementById("btn-nav-admin-login");
+    const btnLogout = document.getElementById("btn-nav-logout");
+    if (authState.user) {
+      if (lbl) lbl.textContent = `${authState.user.name} (${authState.user.role})`;
+      if (btnLogin) btnLogin.classList.add("hidden");
+      if (btnAdminLogin) btnAdminLogin.classList.add("hidden");
+      if (btnLogout) btnLogout.classList.remove("hidden");
+    } else {
+      if (lbl) lbl.textContent = "Guest";
+      if (btnLogin) btnLogin.classList.remove("hidden");
+      if (btnAdminLogin) btnAdminLogin.classList.remove("hidden");
+      if (btnLogout) btnLogout.classList.add("hidden");
+    }
+    updateSidebar();
+  }
+
+  function requireAuth() {
+    if (!authState.token) {
+      showToast("Please login first", "error");
+      showPage("login");
+      throw new Error("Not authenticated");
+    }
+  }
+
+  function connectSocketIfNeeded() {
+    if (socket || !API_BASE_URL) return;
+    socket = io(API_BASE_URL, { transports: ["websocket", "polling"] });
+    socket.on("connect", () => showToast("Socket connected", "success"));
+    socket.on("disconnect", () => showToast("Socket disconnected", "error"));
+    socket.on("new_appointment", handleNewAppointment);
+    socket.on("queue_update", handleQueueUpdate);
+    socket.on("payment_success", handlePaymentSuccess);
+    socket.on("report_uploaded", () => showToast("Report uploaded (socket)", "info"));
+    socket.on("prescription_created", () => showToast("Prescription created (socket)", "info"));
+  }
+
+  function handleNewAppointment(data) {
+    console.log("new_appointment", data);
+    if (role() === "doctor") {
+      loadQueueToday();
+      loadDoctorDashboard();
+    }
+    if (data.visit_type === "walkin") {
+      loadQueueDisplay();
+    }
+  }
+
+  function handleQueueUpdate(data) {
+    console.log("queue_update", data);
+    loadQueueDisplay();
+    loadQueueToday();
+  }
+
+  function handlePaymentSuccess(data) {
+    console.log("payment_success", data);
+    if (role() === "doctor") loadDoctorDashboard();
+  }
+
+  // ============== ROUTER ==============
+
+  function hideAllPages() {
+    document.querySelectorAll(".page").forEach(p => {
+      p.classList.remove("page-active");
+    });
+  }
+
+  function showPage(key) {
+    const map = {
+      "login": "page-login",
+      "admin-login": "page-admin-login",
+      "patient-dashboard": "page-patient-dashboard",
+      "book-appointment": "page-book-appointment",
+      "view-appointments": "page-view-appointments",
+      "appointment-detail": "page-appointment-detail",
+      "walkin": "page-walkin",
+      "queue-display": "page-queue-display",
+      "doctor-dashboard": "page-doctor-dashboard",
+      "doctor-appointments": "page-doctor-appointments",
+      "queue-controller": "page-queue-controller",
+      "create-prescription": "page-create-prescription",
+      "prescription-pdf": "page-prescription-pdf",
+      "reports": "page-reports",
+      "patient-timeline": "page-patient-timeline",
+      "services": "page-services",
+      "payments": "page-payments",
+      "finance": "page-finance",
+      "inventory": "page-inventory",
+      "admin": "page-admin",
+      "settings": "page-settings"
+    };
+    const id = map[key] || key;
+    hideAllPages();
+    const el = document.getElementById(id);
+    if (el) el.classList.add("page-active");
+
+    switch (id) {
+      case "page-patient-dashboard":
+        loadPatientDashboard();
+        break;
+      case "page-book-appointment":
+        initBookAppointmentPage();
+        break;
+      case "page-view-appointments":
+        loadPatientAppointments();
+        break;
+      case "page-patient-timeline":
+        loadPatientTimeline();
+        break;
+      case "page-services":
+        loadServices();
+        break;
+      case "page-queue-display":
+        loadQueueDisplay();
+        connectSocketIfNeeded();
+        break;
+      case "page-walkin":
+        loadWalkinServices();
+        break;
+      case "page-doctor-dashboard":
+        loadDoctorDashboard();
+        connectSocketIfNeeded();
+        break;
+      case "page-doctor-appointments":
+        loadQueueToday();
+        connectSocketIfNeeded();
+        break;
+      case "page-queue-controller":
+        connectSocketIfNeeded();
+        break;
+      case "page-inventory":
+        loadInventory();
+        break;
+      case "page-finance":
+        loadFinanceSummary();
+        break;
+      case "page-admin":
+        loadAdminUsers();
+        loadAppointmentsPerWeekChart();
+        break;
+      case "page-settings":
+        loadSettingsProfile();
+        break;
+    }
+  }
+
+  // ============== SIDEBAR ==============
+
+  function updateSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    const links = document.getElementById("sidebar-links");
+    if (!links || !sidebar) return;
+
+    links.innerHTML = "";
+    if (!authState.user) {
+      sidebar.classList.add("hidden");
+      return;
+    }
+    sidebar.classList.remove("hidden");
+    const r = role();
+    const addLink = (label, pageKey) => {
+      const a = document.createElement("button");
+      a.className = "w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100";
+      a.textContent = label;
+      a.onclick = () => showPage(pageKey);
+      links.appendChild(a);
+    };
+    if (r === "patient") {
+      addLink("Dashboard", "patient-dashboard");
+      addLink("Book Appointment", "book-appointment");
+      addLink("My Appointments", "view-appointments");
+      addLink("Timeline", "patient-timeline");
+      addLink("Services", "services");
+      addLink("Payments", "payments");
+      addLink("Settings", "settings");
+    } else if (r === "doctor") {
+      addLink("Dashboard", "doctor-dashboard");
+      addLink("Today's Appointments", "doctor-appointments");
+      addLink("Queue Controller", "queue-controller");
+      addLink("Create Prescription", "create-prescription");
+      addLink("Reports", "reports");
+      addLink("Inventory", "inventory");
+      addLink("Finance", "finance");
+      addLink("Settings", "settings");
+    } else if (r === "admin") {
+      addLink("Admin Dashboard", "admin");
+      addLink("Services", "services");
+      addLink("Inventory", "inventory");
+      addLink("Finance", "finance");
+      addLink("Queue Display (TV)", "queue-display");
+      addLink("Walk-in Registration", "walkin");
+      addLink("Settings", "settings");
+    }
+  }
+
+  // ============== NAVBAR BUTTONS ==============
+
+  const btnNavLogin = document.getElementById("btn-nav-login");
+  if (btnNavLogin) {
+    btnNavLogin.addEventListener("click", () => {
+      showPage("login");
+    });
+  }
+
+  const btnNavAdminLogin = document.getElementById("btn-nav-admin-login");
+  if (btnNavAdminLogin) {
+    btnNavAdminLogin.addEventListener("click", () => {
+      showPage("admin-login");
+    });
+  }
+
+  const btnNavLogout = document.getElementById("btn-nav-logout");
+  if (btnNavLogout) {
+    btnNavLogout.addEventListener("click", () => {
+      clearAuth();
+      showToast("Logged out", "info");
+      showPage("login");
+    });
+  }
+
+  // ============== LOGIN & AUTH FORMS ==============
+
+  const formLogin = document.getElementById("form-login");
+  if (formLogin) {
+    formLogin.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const email = fd.get("email");
+      const password = fd.get("password");
+      try {
+        setLoader(true);
+        const res = await api.post("/login", { email, password });
+        const { token, role: userRole, name, id } = res.data;
+        authState = { token, user: { id, name, role: userRole } };
+        saveAuth();
+        showToast("Login successful", "success");
+        redirectAfterLogin();
+      } catch (err) {
+        console.error(err);
+        showToast("Login failed", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  const formAdminLogin = document.getElementById("form-admin-login");
+  if (formAdminLogin) {
+    formAdminLogin.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const email = fd.get("email");
+      const password = fd.get("password");
+      try {
+        setLoader(true);
+        const res = await api.post("/login", { email, password });
+        const { token, role: userRole, name, id } = res.data;
+        if (userRole !== "admin") {
+          showToast("This account is not an admin", "error");
+          return;
+        }
+        authState = { token, user: { id, name, role: userRole } };
+        saveAuth();
+        showToast("Admin login successful", "success");
+        redirectAfterLogin();
+      } catch (err) {
+        console.error(err);
+        showToast("Admin login failed", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  const formSendOtp = document.getElementById("form-send-otp");
+  if (formSendOtp) {
+    formSendOtp.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const email = fd.get("email");
+      try {
+        setLoader(true);
+        await api.post("/auth/send-otp", { mode: "email", email, auto_create: true });
+        showToast("OTP sent to email", "success");
+      } catch (err) {
+        console.error(err);
+        showToast("Failed to send OTP", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  const formVerifyOtp = document.getElementById("form-verify-otp");
+  if (formVerifyOtp) {
+    formVerifyOtp.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const email = fd.get("email");
+      const otp = fd.get("otp");
+      try {
+        setLoader(true);
+        const res = await api.post("/auth/verify-otp", {
+          mode: "email",
+          email,
+          otp,
+          auto_create: true
+        });
+        const { token, id, role: userRole, name } = res.data;
+        authState = { token, user: { id, name, role: userRole } };
+        saveAuth();
+        showToast("OTP verified", "success");
+        redirectAfterLogin();
+      } catch (err) {
+        console.error(err);
+        showToast("OTP verification failed", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  function redirectAfterLogin() {
+    const r = role();
+    if (r === "patient") showPage("patient-dashboard");
+    else if (r === "doctor") showPage("doctor-dashboard");
+    else if (r === "admin") showPage("admin");
+    else showPage("login");
+  }
+
+  // ============== PATIENT DASHBOARD & TIMELINE ==============
+
+  async function loadPatientTimeline() {
+    requireAuth();
+    if (role() !== "patient" && role() !== "doctor" && role() !== "admin") return;
+    try {
+      setLoader(true);
+      const pid = authState.user.id;
+      const res = await api.get(`/patients/${pid}/timeline`);
+      const items = res.data || [];
+      const container = document.getElementById("timeline-list");
+      if (!container) return;
+      container.innerHTML = "";
+      items.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "border-l-2 border-sky-500 pl-3 py-1";
+        const ts = item.timestamp || "";
+        let label = item.type;
+        if (item.type === "appointment") label = `Appointment #${item.appointment_id}`;
+        if (item.type === "prescription") label = `Prescription #${item.prescription_id}`;
+        if (item.type === "report") label = `Report: ${item.filename}`;
+        if (item.type === "payment") label = `Payment: ₹${item.amount}`;
+        div.innerHTML = `
+          <div class="text-xs text-slate-400">${ts}</div>
+          <div class="text-sm font-medium">${label}</div>
+        `;
+        container.appendChild(div);
+      });
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to load timeline", "error");
+    } finally {
+      setLoader(false);
+    }
+  }
+
+  async function loadPatientDashboard() {
+    await loadPatientTimeline();
+    const pid = authState.user.id;
+    const res = await api.get(`/patients/${pid}/timeline`);
+    const items = res.data || [];
+    const appts = items.filter(i => i.type === "appointment");
+    const prescs = items.filter(i => i.type === "prescription");
+    const nowIso = new Date().toISOString();
+    const upcoming = appts.filter(a => a.timestamp && a.timestamp > nowIso);
+    const past = appts.filter(a => a.timestamp && a.timestamp <= nowIso);
+    const elUpcoming = document.getElementById("patient-stat-upcoming");
+    const elPast = document.getElementById("patient-stat-past");
+    const elPresc = document.getElementById("patient-stat-prescriptions");
+    if (elUpcoming) elUpcoming.textContent = upcoming.length;
+    if (elPast) elPast.textContent = past.length;
+    if (elPresc) elPresc.textContent = prescs.length;
+
+    const recentList = document.getElementById("patient-dashboard-timeline");
+    if (!recentList) return;
+    recentList.innerHTML = "";
+    items.slice(-5).forEach(i => {
+      const li = document.createElement("li");
+      li.className = "flex justify-between items-center border-b py-1";
+      li.innerHTML = `
+        <span class="text-xs">${i.type} @ ${i.timestamp}</span>
+        ${i.type === "appointment"
+          ? `<button class="text-[11px] text-sky-600" onclick="openAppointmentDetail(${i.appointment_id})">View</button>`
+          : ""
+        }
+      `;
+      recentList.appendChild(li);
+    });
+  }
+
+  async function loadPatientAppointments() {
+    requireAuth();
+    if (role() !== "patient") {
+      showToast("Only patients can view this", "error");
+      return;
+    }
+    const pid = authState.user.id;
+    const res = await api.get(`/patients/${pid}/timeline`);
+    const items = res.data || [];
+    const appts = items.filter(i => i.type === "appointment");
+    const tbody = document.getElementById("table-patient-appointments");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    appts.forEach(a => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="py-1">${a.appointment_id}</td>
+        <td>${a.timestamp || ""}</td>
+        <td>${a.status}</td>
+        <td>${a.visit_type || ""}</td>
+        <td>${a.queue_number || ""}</td>
+        <td><button class="text-[11px] text-sky-600" onclick="openAppointmentDetail(${a.appointment_id})">Details</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function openAppointmentDetail(aid) {
+    requireAuth();
+    const container = document.getElementById("appointment-detail-container");
+    if (!container) return;
+    container.innerHTML = `
+      <div class="bg-white rounded-xl p-4 shadow-sm space-y-3">
+        <div class="text-sm">Appointment ID: <span class="font-semibold">${aid}</span></div>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <button class="px-3 py-1 rounded-lg border border-slate-300 hover:bg-slate-50"
+            onclick="downloadBill(${aid})">Download Bill PDF</button>
+          <button class="px-3 py-1 rounded-lg border border-slate-300 hover:bg-slate-50"
+            onclick="loadAppointmentPrescriptions(${aid})">Load Prescriptions</button>
+        </div>
+        <div id="appointment-prescriptions" class="mt-2 text-xs"></div>
+      </div>
+    `;
+    showPage("appointment-detail");
+  }
+
+  async function loadAppointmentPrescriptions(aid) {
+    try {
+      const res = await api.get(`/prescriptions/appointment/${aid}`);
+      const arr = res.data || [];
+      const div = document.getElementById("appointment-prescriptions");
+      if (!div) return;
+      div.innerHTML = "";
+      arr.forEach(p => {
+        const el = document.createElement("div");
+        el.className = "border rounded-lg px-3 py-2 mb-1";
+        el.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div>ID: ${p.id}</div>
+            <button class="text-[11px] text-sky-600" onclick="openPrescriptionPdfById(${p.id})">
+              PDF
+            </button>
+          </div>
+          <div class="text-xs text-slate-500">Diagnosis: ${p.diagnosis || ""}</div>
+        `;
+        div.appendChild(el);
+      });
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load prescriptions", "error");
+    }
+  }
+
+  async function downloadBill(aid) {
+    requireAuth();
+    window.open(`${API_BASE_URL}/appointments/${aid}/bill`, "_blank");
+  }
+
+  // ============== SERVICES ==============
+
+  async function loadServices() {
+    try {
+      const res = await api.get("/services");
+      const list = res.data || [];
+      const container = document.getElementById("services-list");
+      if (!container) return;
+      container.innerHTML = "";
+      list.forEach(s => {
+        const card = document.createElement("div");
+        card.className = "bg-white rounded-xl p-4 shadow-sm";
+        card.innerHTML = `
+          <div class="font-semibold text-sm mb-1">${s.name}</div>
+          <div class="text-xs text-slate-500 mb-2">₹${s.price}</div>
+        `;
+        container.appendChild(card);
+      });
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load services", "error");
+    }
+  }
+
+  // ============== WALK-IN REGISTRATION ==============
+
+  async function loadWalkinServices() {
+    const res = await api.get("/services");
+    const list = res.data || [];
+    const sel = document.getElementById("walkin-service-select");
+    if (!sel) return;
+    sel.innerHTML = `<option value="">Select service</option>`;
+    list.forEach(s => {
+      const o = document.createElement("option");
+      o.value = s.id;
+      o.textContent = `${s.name} (₹${s.price})`;
+      sel.appendChild(o);
+    });
+  }
+
+  const formWalkin = document.getElementById("form-walkin");
+  if (formWalkin) {
+    formWalkin.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      try {
+        setLoader(true);
+        const res = await api.post("/appointments/walkin", body);
+        const resEl = document.getElementById("walkin-result");
+        if (resEl) {
+          resEl.textContent =
+            `Walk-in created. Token: ${res.data.token}, Appointment ID: ${res.data.appointment_id}`;
+        }
+        showToast("Walk-in appointment created", "success");
+      } catch (e2) {
+        console.error(e2);
+        showToast("Failed to create walk-in", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  // ============== QUEUE DISPLAY & DOCTOR QUEUE ==============
+
+  async function loadQueueDisplay() {
+    try {
+      const res = await api.get("/queue/display");
+      const data = res.data || {};
+      const current = data.current;
+      const upcoming = data.upcoming || [];
+      const curEl = document.getElementById("queue-current-token");
+      if (curEl) {
+        curEl.textContent = current ? current.queue_number : "--";
+      }
+      const ul = document.getElementById("queue-upcoming-list");
+      if (!ul) return;
+      ul.innerHTML = "";
+      upcoming.forEach(u => {
+        const li = document.createElement("li");
+        li.textContent = `Token ${u.queue_number}`;
+        ul.appendChild(li);
+      });
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load queue", "error");
+    }
+  }
+
+  async function loadQueueToday() {
+    requireAuth();
+    if (role() !== "doctor" && role() !== "admin") return;
+    try {
+      const res = await api.get("/queue/today");
+      const appts = res.data || [];
+      const tbody = document.getElementById("table-doctor-today");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+      appts.forEach(a => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="py-1">${a.queue_number || ""}</td>
+          <td>${a.patient_id}</td>
+          <td>${a.visit_type}</td>
+          <td>${a.status}</td>
+          <td>${a.queue_status}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load queue today", "error");
+    }
+  }
+
+  async function queueNext() {
+    requireAuth();
+    try {
+      const res = await api.post("/queue/next");
+      showToast(res.data.msg || "Next patient", "success");
+      loadQueueToday();
+      loadQueueDisplay();
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to move next", "error");
+    }
+  }
+
+  // NEW FUNCTION: COMPLETE CURRENT & CALL NEXT
+  async function queueCompleteAndNext() {
+    requireAuth();
+    try {
+      const res = await api.post("/queue/complete-and-next");
+      const msg = (res.data && res.data.msg) || "Completed current and called next";
+      showToast(msg, "success");
+      loadQueueToday();
+      loadQueueDisplay();
+    } catch (e) {
+      console.error(e);
+      const msg = e.response?.data?.msg || "Failed to complete & move next";
+      showToast(msg, "error");
+    }
+  }
+
+  async function queueSkip() {
+    requireAuth();
+    const input = document.getElementById("queue-skip-id");
+    if (!input) return;
+    const aid = input.value;
+    if (!aid) return;
+    try {
+      const res = await api.post(`/queue/skip/${aid}`);
+      showToast(res.data.msg || "Appointment skipped", "success");
+      loadQueueToday();
+      loadQueueDisplay();
+    } catch (e) {
+      console.error(e);
+      showToast("Skip failed", "error");
+    }
+  }
+
+  // ============== DOCTOR DASHBOARD & ADMIN ANALYTICS ==============
+
+  async function loadDoctorDashboard() {
+    requireAuth();
+    if (role() !== "doctor") return;
+    try {
+      setLoader(true);
+      const res = await api.get("/dashboard/doctor");
+      const d = res.data || {};
+      const elToday = document.getElementById("doc-stat-today");
+      const elPending = document.getElementById("doc-stat-pending");
+      const elWalkins = document.getElementById("doc-stat-walkins");
+      if (elToday) elToday.textContent = d.today_appointments || 0;
+      if (elPending) elPending.textContent = d.pending_payments || 0;
+      if (elWalkins) elWalkins.textContent = d.walkins_today || 0;
+
+      const topEl = document.getElementById("doc-top-services");
+      if (topEl) {
+        topEl.innerHTML = "";
+        (d.top_services || []).forEach(s => {
+          const li = document.createElement("li");
+          li.textContent = `${s.name} (${s.count})`;
+          topEl.appendChild(li);
+        });
+      }
+
+      const lowEl = document.getElementById("doc-low-stock");
+      if (lowEl) {
+        lowEl.innerHTML = "";
+        (d.low_stock || []).forEach(i => {
+          const li = document.createElement("li");
+          li.textContent = `${i.name} - ${i.quantity}/${i.min_required} ${i.unit}`;
+          lowEl.appendChild(li);
+        });
+      }
+
+      const revRes = await api.get("/analytics/revenue-per-month");
+      const labels = revRes.data.labels || [];
+      const dataset = revRes.data.dataset || [];
+      const ctx = document.getElementById("chart-revenue-month");
+      if (ctx) {
+        if (charts.revenueMonth) charts.revenueMonth.destroy();
+        charts.revenueMonth = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [{
+              label: "Revenue",
+              data: dataset
+            }]
+          }
+        });
+      }
+
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load doctor dashboard", "error");
+    } finally {
+      setLoader(false);
+    }
+  }
+
+  async function loadAppointmentsPerWeekChart() {
+    requireAuth();
+    if (role() !== "admin" && role() !== "doctor") return;
+    try {
+      const res = await api.get("/analytics/appointments-per-week");
+      const labels = res.data.labels || [];
+      const dataset = res.data.dataset || [];
+      const ctx = document.getElementById("chart-appointments-week");
+      if (!ctx) return;
+      if (charts.apptsWeek) charts.apptsWeek.destroy();
+      charts.apptsWeek = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            label: "Appointments",
+            data: dataset
+          }]
+        }
+      });
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load analytics", "error");
+    }
+  }
+
+  // ============== BOOK APPOINTMENT (NORMAL) ==============
+
+  async function initBookAppointmentPage() {
+    requireAuth();
+    if (role() !== "patient") {
+      showToast("Only patients can book appointments", "error");
+      return;
+    }
+    try {
+      const svcRes = await api.get("/services");
+      const svcs = svcRes.data || [];
+      const svcSel = document.getElementById("book-service-select");
+      if (svcSel) {
+        svcSel.innerHTML = `<option value="">Select service</option>`;
+        svcs.forEach(s => {
+          const o = document.createElement("option");
+          o.value = s.id;
+          o.textContent = `${s.name} (₹${s.price})`;
+          svcSel.appendChild(o);
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load services for booking", "error");
+    }
+  }
+
+  const formBookAppt = document.getElementById("form-book-appointment");
+  if (formBookAppt) {
+    formBookAppt.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      requireAuth();
+      if (role() !== "patient") {
+        showToast("Only patients can book appointments", "error");
+        return;
+      }
+      const fd = new FormData(e.target);
+      const service_id = fd.get("service_id");
+      const dateInput = document.getElementById("book-date");
+      const timeInput = document.getElementById("book-time");
+      const dateVal = dateInput ? dateInput.value : "";
+      const timeVal = timeInput ? timeInput.value : "";
+
+      if (!service_id) {
+        showToast("Please select a service", "error");
+        return;
+      }
+      if (!dateVal || !timeVal) {
+        showToast("Pick date & time", "error");
+        return;
+      }
+
+      // Combine date + time, convert to ISO for backend
+      const isoLocal = `${dateVal}T${timeVal}:00`;
+      const requested_time = new Date(isoLocal).toISOString();
+
+      try {
+        setLoader(true);
+        // Backend (Option A) should auto-pick single doctor, so only service_id + requested_time needed
+        const res = await api.post("/appointments/book", {
+          service_id,
+          requested_time
+        });
+        const resultEl = document.getElementById("book-appointment-result");
+        if (resultEl) {
+          resultEl.textContent =
+            `Booked! Queue number: ${res.data.queue_number}, Appointment ID: ${res.data.id}`;
+        }
+        showToast("Appointment booked", "success");
+      } catch (e2) {
+        console.error(e2);
+        const msg = e2.response?.data?.msg || "Booking failed";
+        showToast(msg, "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  // ============== PRESCRIPTIONS ==============
+
+  function addMedicineRow() {
+    const container = document.getElementById("medicines-list");
+    if (!container) return;
+    const div = document.createElement("div");
+    div.className = "grid grid-cols-5 gap-1 text-[11px]";
+    div.innerHTML = `
+      <input placeholder="Name" data-med-field="name" class="border rounded px-2 py-1" />
+      <input placeholder="Dose" data-med-field="dose" class="border rounded px-2 py-1" />
+      <input placeholder="Freq" data-med-field="frequency" class="border rounded px-2 py-1" />
+      <input placeholder="Duration" data-med-field="duration" class="border rounded px-2 py-1" />
+      <input placeholder="Remarks" data-med-field="remarks" class="border rounded px-2 py-1" />
+    `;
+    container.appendChild(div);
+  }
+
+  const formPrescription = document.getElementById("form-prescription");
+  if (formPrescription) {
+    formPrescription.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      requireAuth();
+      const fd = new FormData(e.target);
+      const appointment_id = fd.get("appointment_id");
+      const diagnosis = fd.get("diagnosis");
+      const notes = fd.get("notes");
+      const container = document.getElementById("medicines-list");
+      const rows = container ? Array.from(container.children) : [];
+      const medicines = rows.map(row => {
+        const fields = row.querySelectorAll("[data-med-field]");
+        const med = {};
+        fields.forEach(f => med[f.getAttribute("data-med-field")] = f.value);
+        return med;
+      }).filter(m => m.name || m.dose || m.frequency || m.duration || m.remarks);
+
+      try {
+        setLoader(true);
+        const res = await api.post("/prescriptions", {
+          appointment_id,
+          diagnosis,
+          notes,
+          medicines
+        });
+        const resultEl = document.getElementById("prescription-result");
+        if (resultEl) {
+          resultEl.textContent = `Prescription created (ID: ${res.data.id})`;
+        }
+        showToast("Prescription created", "success");
+      } catch (e2) {
+        console.error(e2);
+        showToast("Failed to create prescription", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  function openPrescriptionPdf() {
+    const idInput = document.getElementById("prescription-pdf-id");
+    if (!idInput) return;
+    const id = idInput.value;
+    if (!id) return;
+    openPrescriptionPdfById(id);
+  }
+
+  function openPrescriptionPdfById(id) {
+    requireAuth();
+    window.open(`${API_BASE_URL}/prescriptions/${id}/pdf`, "_blank");
+  }
+
+  // ============== REPORTS ==============
+
+  const formUploadReport = document.getElementById("form-upload-report");
+  if (formUploadReport) {
+    formUploadReport.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      requireAuth();
+      const fd = new FormData(e.target);
+      try {
+        setLoader(true);
+        await api.post("/reports/upload", fd, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        showToast("Report uploaded", "success");
+      } catch (e2) {
+        console.error(e2);
+        showToast("Failed to upload report", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  // ============== INCOME & EXPENSE ==============
+
+  const formExpense = document.getElementById("form-expense");
+  if (formExpense) {
+    formExpense.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      requireAuth();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      try {
+        setLoader(true);
+        await api.post("/finance/expenses", body);
+        showToast("Expense added", "success");
+        loadFinanceSummary();
+      } catch (e2) {
+        console.error(e2);
+        showToast("Failed to add expense", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  const formFinanceRange = document.getElementById("form-finance-range");
+  if (formFinanceRange) {
+    formFinanceRange.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await loadFinanceSummary();
+    });
+  }
+
+  async function loadFinanceSummary() {
+    requireAuth();
+    const form = document.getElementById("form-finance-range");
+    if (!form) return;
+    const fd = new FormData(form);
+    const from = fd.get("from");
+    const to = fd.get("to");
+    const params = {};
+    if (from) params.from = from;
+    if (to) params.to = to;
+    try {
+      setLoader(true);
+      const res = await api.get("/finance/summary", { params });
+      const d = res.data || {};
+      const div = document.getElementById("finance-summary");
+      if (!div) return;
+      div.innerHTML = `
+        <div>From: ${d.from}</div>
+        <div>To: ${d.to}</div>
+        <div class="mt-2">Total Income: ₹${d.total_income}</div>
+        <div>Total Expense: ₹${d.total_expense}</div>
+        <div class="font-semibold">Profit: ₹${d.profit}</div>
+      `;
+    } catch (e2) {
+      console.error(e2);
+      showToast("Failed to load finance summary", "error");
+    } finally {
+      setLoader(false);
+    }
+  }
+
+  // ============== INVENTORY ==============
+
+  async function loadInventory() {
+    requireAuth();
+    try {
+      const res = await api.get("/inventory");
+      const items = res.data || [];
+      const container = document.getElementById("inventory-list");
+      if (!container) return;
+      container.innerHTML = "";
+      items.forEach(i => {
+        const div = document.createElement("div");
+        div.className = "border rounded-lg px-3 py-2 flex justify-between items-center";
+        div.innerHTML = `
+          <div class="text-xs">
+            <div class="font-semibold">${i.name}</div>
+            <div>${i.quantity}/${i.min_required} ${i.unit} ${i.expiry_date ? "- Exp: " + i.expiry_date : ""}</div>
+          </div>
+          <button class="text-[11px] text-sky-600" onclick="editInventoryItem(${i.id})">Edit</button>
+        `;
+        container.appendChild(div);
+      });
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load inventory", "error");
+    }
+  }
+
+  async function editInventoryItem(id) {
+    requireAuth();
+    const res = await api.get("/inventory");
+    const items = res.data || [];
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    const form = document.getElementById("form-inventory");
+    if (!form) return;
+    form.elements["id"].value = item.id;
+    form.elements["name"].value = item.name;
+    form.elements["quantity"].value = item.quantity;
+    form.elements["min_required"].value = item.min_required;
+    form.elements["unit"].value = item.unit;
+    form.elements["expiry_date"].value = item.expiry_date || "";
+  }
+
+  const formInventory = document.getElementById("form-inventory");
+  if (formInventory) {
+    formInventory.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      requireAuth();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      try {
+        setLoader(true);
+        await api.post("/inventory", body);
+        showToast("Inventory saved", "success");
+        e.target.reset();
+        loadInventory();
+      } catch (e2) {
+        console.error(e2);
+        showToast("Failed to save inventory", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  // ============== PAYMENTS (Razorpay) ==============
+
+  const formRazorpayCreate = document.getElementById("form-razorpay-create");
+  if (formRazorpayCreate) {
+    formRazorpayCreate.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      requireAuth();
+      const fd = new FormData(e.target);
+      const appointment_id = fd.get("appointment_id");
+      try {
+        setLoader(true);
+        const res = await api.post("/payments/razorpay/create-order", { appointment_id });
+        const pre = document.getElementById("razorpay-order");
+        if (pre) {
+          pre.textContent = JSON.stringify(res.data, null, 2);
+        }
+        showToast("Razorpay order created", "success");
+      } catch (e2) {
+        console.error(e2);
+        showToast("Failed to create Razorpay order", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  // ============== ADMIN PANEL ==============
+
+  async function loadAdminUsers() {
+    requireAuth();
+    if (role() !== "admin") return;
+    try {
+      const res = await api.get("/admin/users");
+      const users = res.data || [];
+      const tbody = document.getElementById("admin-users-table");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+      users.forEach(u => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="py-1">${u.id}</td>
+          <td>${u.name}</td>
+          <td>${u.role}</td>
+          <td>
+            ${u.role !== "admin" ? `<button class="text-[11px] text-red-600" onclick="deleteUser(${u.id})">Delete</button>` : ""}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load users", "error");
+    }
+  }
+
+  async function deleteUser(id) {
+    if (!confirm("Delete user " + id + "?")) return;
+    try {
+      await api.delete(`/admin/delete-user/${id}`);
+      showToast("User deleted", "success");
+      loadAdminUsers();
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to delete user", "error");
+    }
+  }
+
+  const formCreateDoctor = document.getElementById("form-create-doctor");
+  if (formCreateDoctor) {
+    formCreateDoctor.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      requireAuth();
+      if (role() !== "admin") return;
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      try {
+        setLoader(true);
+        await api.post("/admin/create-doctor", body);
+        showToast("Doctor created", "success");
+        loadAdminUsers();
+      } catch (e2) {
+        console.error(e2);
+        showToast("Failed to create doctor", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  async function downloadFile(path) {
+    window.open(API_BASE_URL + path, "_blank");
+  }
+
+  // ============== SETTINGS / PROFILE ==============
+
+  async function loadSettingsProfile() {
+    requireAuth();
+    try {
+      const res = await api.get("/user/me");
+      const u = res.data || {};
+      const form = document.getElementById("form-settings");
+      if (!form) return;
+      form.elements["name"].value = u.name || "";
+      form.elements["phone"].value = u.phone || "";
+      form.elements["address"].value = u.address || "";
+      form.elements["dob"].value = u.dob || "";
+      const summary = document.getElementById("settings-summary");
+      if (summary) {
+        summary.textContent = `Email: ${u.email}, Role: ${u.role}`;
+      }
+      const certBlock = document.getElementById("settings-doctor-cert");
+      if (certBlock) {
+        if (u.role === "doctor") {
+          certBlock.classList.remove("hidden");
+        } else {
+          certBlock.classList.add("hidden");
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load profile", "error");
+    }
+  }
+
+  const formSettings = document.getElementById("form-settings");
+  if (formSettings) {
+    formSettings.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      requireAuth();
+      const fd = new FormData(e.target);
+      try {
+        setLoader(true);
+        await api.post("/user/update", fd, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        showToast("Profile updated", "success");
+        loadSettingsProfile();
+      } catch (e2) {
+        console.error(e2);
+        showToast("Failed to update profile", "error");
+      } finally {
+        setLoader(false);
+      }
+    });
+  }
+
+  // ============== INITIALIZE APP ==============
+
+  window.addEventListener("DOMContentLoaded", () => {
+    loadAuth();
+    updateNavAuth();
+    if (authState.user) {
+      redirectAfterLogin();
+    } else {
+      showPage("queue-display");
+    }
+  });
+</script>
+
+</body>
+</html>
